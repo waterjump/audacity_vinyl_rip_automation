@@ -17,10 +17,18 @@ import subprocess
 # ========================
 LOCALIZED_STRINGS = {
     'en': {
-        'export_button': "Export"
+        'export_button': "Export",
+        'edit': 'Edit',
+        'labels': 'Labels',
+        'edit_labels': 'Edit Labels...',
+        'label': "Label"
     },
     'de': {
-        'export_button': "Exportieren"
+        'export_button': "Exportieren",
+        'edit': 'Bearbeiten',
+        'labels': 'Textmarken',
+        'edit_labels': 'Textmarken bearbeiten...',
+        'label': "Textmarke"
     }
 }
 
@@ -207,6 +215,67 @@ metadata = get_discogs_metadata(int(discogs_id))
 
 outputfolder = os.path.join(PATH, f"{metadata['artist']}_{metadata['release_title']}")
 no_tracks = len(metadata['tracks'])
+
+#verify number of tracks
+as_script_1 = f'''
+tell application "System Events"
+    set previouslyFocusedApp to name of first application process whose frontmost is true
+end tell
+
+tell application "Audacity"
+    activate
+    delay 0.2 -- Ensure Audacity is in focus
+end tell
+
+set labelCount to 0
+tell application "System Events"
+    tell process "Audacity"
+        click menu item "{get_localized_string("labels")}" of menu "{get_localized_string("edit")}" of menu bar item "{get_localized_string("edit")}" of menu bar 1
+        delay 0.2 -- Small delay to ensure the submenu opens
+        click menu item "{get_localized_string("edit_labels")}" of menu "{get_localized_string("labels")}" of menu item "{get_localized_string("labels")}" of menu "{get_localized_string("edit")}" of menu bar item "{get_localized_string("edit")}" of menu bar 1
+        delay 0.2
+        set frontWindow to window 1
+        set allElements to entire contents of frontWindow
+        set matchingElements to {{}}
+        repeat with anElement in allElements
+            try
+                set elementName to name of anElement
+                if elementName starts with "{get_localized_string('label')} " then
+                    set end of matchingElements to elementName
+                end if
+            end try
+        end repeat
+        set labelCount to count of matchingElements
+    end tell
+end tell
+
+tell application previouslyFocusedApp
+    activate
+end tell
+
+return labelCount
+'''
+
+def run_applescript():
+    # Run the AppleScript using osascript and capture the output
+    process = subprocess.run(
+        ["osascript", "-e", as_script_1],
+        text=True,
+        capture_output=True,
+        check=True
+    )
+    # Return the stdout from the AppleScript
+    return int(process.stdout.strip())
+
+number_of_labels = run_applescript()
+if no_tracks != number_of_labels:
+    print('The number of labels in Audacity doesn''t match the number of tracks on the specified release')
+    print(f'Number of labels: {number_of_labels}')
+    print(f'Number of tracks: {no_tracks}')
+    print(f'Adjust labels as needed')
+    exit(1)
+
+print('Number of labels matches number of tracks')
 
 
 # Generate the AppleScript dynamically
